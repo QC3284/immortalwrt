@@ -59,6 +59,19 @@ kernel 位于 `0x400000`、rootfs 窗口 `0x1100000`（17 MiB）、镜像头
 `0x1500000`；正式产物由 kit 的 GitHub Actions（`firmware.yml`）打包成
 `e2631-immortalwrt-*.bin`。
 
+## 内核选项（DEVMEM）
+
+`seed/e2631.config` 必须保留 `CONFIG_KERNEL_DEVMEM=y`（树 CI 有静态断言）。
+`include/kernel-defaults.mk:118-119` 会把顶层 `.config` 里所有
+`CONFIG_KERNEL_*` 去掉 `KERNEL_` 前缀后**追加**到合并后的内核配置末尾，
+kconfig 合并是 last-wins；`config/Config-kernel.in:1504` 的 `KERNEL_DEVMEM`
+默认 n，顶层配置里若没有 =y，追加的 `# CONFIG_DEVMEM is not set` 会盖掉
+`target/linux/sanechips/config-6.18:147` 的 `CONFIG_DEVMEM=y`。v1.4 曾在 seed
+里修过这个问题，但 v1.9→v1.10 的 tree-fork 迁移（t12）没有把这行带过来，
+v1.10 成品内核就没有 `/dev/mem`，`/sbin/e2631-fwstate` 读不了
+`MT_TOP_MISC`。`STRICT_DEVMEM` / `IO_STRICT_DEVMEM` 是 x86-only 符号，在本
+ARM target 上无意义，不要动它们。
+
 ## userdata 分区与 extroot（v1.10）
 
 47 MiB 的 `userdata` 分区可被激活成 `/overlay`（extroot），把可写空间从

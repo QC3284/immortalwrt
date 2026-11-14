@@ -98,8 +98,14 @@ jobs:
       - name: Copy the seed config and run make defconfig
         run: |
           set -eu
+          # DEVMEM is decided by this top-level CONFIG_KERNEL_* request: the
+          # kernel build appends every CONFIG_KERNEL_* line after the merged
+          # config (last-wins), so losing this one silently removes /dev/mem
+          # and breaks /sbin/e2631-fwstate.
+          grep -qx 'CONFIG_KERNEL_DEVMEM=y' seed/e2631.config
           cp seed/e2631.config .config
           make defconfig
+          grep -q '^CONFIG_KERNEL_DEVMEM=y$' .config
           grep -q '^CONFIG_TARGET_sanechips=y$' .config
           grep -q '^CONFIG_TARGET_sanechips_generic=y$' .config
           grep -q '^CONFIG_TARGET_DEVICE_sanechips_generic_DEVICE_zte_zxhn-e2631=y$' .config
