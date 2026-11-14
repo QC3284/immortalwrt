@@ -5,9 +5,11 @@
 #   E2631_CONFIRM=ERASE_USERDATA_PARTITION e2631-userdata-init --apply
 #
 # Destructive by design, but only after six checks pass and a per-run
-# environment confirmation names the operation.  After it succeeds, the
+# environment confirmation names the operation.  The new volume is stamped
+# with this firmware's snapshot identity (/lib/e2631-snapshot.sh) before the
+# script returns, so later boots can tell "ours" from a stale snapshot; the
 # activation gate (/etc/init.d/e2631-userdata) picks the volume up on the
-# NEXT boot - nothing here mounts or activates anything.
+# NEXT boot - nothing here enables or mounts it beyond the formatting access.
 #
 # Guard lineage: the checks and staged-abort structure come from tigaotg's
 # PR#1 prototype (nine isolated mock tests); this version resolves the
@@ -19,6 +21,10 @@ PATH=/usr/sbin:/usr/bin:/sbin:/bin
 FATAL="REFUSE:"
 die() { echo "$FATAL $*"; exit 1; }
 die_noformat() { echo "$FATAL $* (nothing was written)"; exit 1; }
+
+[ -r /lib/e2631-snapshot.sh ] || die "missing /lib/e2631-snapshot.sh (incomplete image)"
+# shellcheck source=/dev/null
+. /lib/e2631-snapshot.sh
 
 MODE=${1:-}
 [ "$MODE" = "--plan" ] || [ "$MODE" = "--apply" ] || die "usage: $0 --plan | --apply (needs E2631_CONFIRM=ERASE_USERDATA_PARTITION)"
@@ -91,6 +97,16 @@ if ! mount -t ubifs /dev/ubi0_0 /tmp/e2631-udfmt; then
 	umount /tmp/e2631-udfmt 2>/dev/null
 	die_noformat "the formatting mount failed - the volume exists but is blank; re-run this script after investigating"
 fi
+
+# Stamp the volume while it is mounted: this is the identity the preinit hook
+# and the activation gate compare on every later boot.
+if ! e2631_write_marker /tmp/e2631-udfmt; then
+	umount /tmp/e2631-udfmt 2>/dev/null
+	rmdir /tmp/e2631-udfmt 2>/dev/null
+	echo "FATAL: the volume was formatted but its snapshot marker could not be recorded; the boot gate will refuse it until this is fixed"
+	exit 1
+fi
+echo "APPLY: recorded snapshot marker: $(e2631_snapshot_id)"
 umount /tmp/e2631-udfmt
 rmdir /tmp/e2631-udfmt
 
@@ -99,10 +115,13 @@ if [ "$(dd if=/dev/ubi0_0 bs=4 count=1 2>/dev/null | md5sum | cut -c1-32)" != "5
 fi
 
 cat <<EOF
-DONE: the 47 MiB userdata volume is formatted and verified.
-      Reboot: preinit attaches it, the activation gate sees the superblock
-      and enables the extroot fstab entry, and from the boot after that
-      /overlay lives on this volume (~35 MiB writable instead of ~8 MiB).
+DONE: the 47 MiB userdata volume is formatted, verified and stamped with
+      snapshot marker: $(e2631_snapshot_id)
+      Reboot: preinit attaches it, verifies that marker, the activation gate
+      enables the extroot fstab entry, and from the boot after that /overlay
+      lives on this volume (~35 MiB writable instead of ~8 MiB).
       No configuration is migrated automatically - the internal overlay
-      keeps working as the fallback either way.
+      keeps working as the fallback either way.  If a later firmware build
+      carries a different snapshot identity, preinit and the gate refuse the
+      volume instead of resurrecting this snapshot's configuration.
 EOF

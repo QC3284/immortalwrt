@@ -1,37 +1,54 @@
 #!/bin/sh /etc/rc.common
+# shellcheck disable=SC1091
 # Extroot activation gate for the 47 MiB userdata partition.
 #
-# v1.9 default-adopt behaviour:
-#   - a formatted volume is enabled for extroot immediately, and the current
-#     internal-overlay configuration is COPIED onto it first, so the switch
-#     does not orphan the router's settings (the v1.8 behaviour enabled an
-#     empty volume and the config stayed behind on the jffs2 overlay);
-#   - an UNFORMATTED volume is adopted automatically: the gate runs
-#     /sbin/e2631-userdata-init --apply (which re-verifies the partition
-#     name, the 47 MiB window behind both slots and the size itself), then
-#     migrates and enables in the same boot.  The interactive confirmation
-#     that init demands is provided by this gate - the checks it guards are
-#     the gate's own: partition found by name, offset >= 0x3f00000, and
-#     "a formatted volume is never re-formatted".
-#   - opt-out: `uci set e2631.storage.autoadopt='0'; uci commit e2631`
-#     restores the v1.8 behaviour (everything stays manual).
+# v1.9 default-adopt behaviour, hardened for the mainline-quality pass:
+#   - a volume this firmware adopted carries a snapshot marker (written by
+#     /lib/e2631-snapshot.sh).  The preinit hook (79_e2631_userdata) verifies
+#     it BEFORE mount_root can pivot onto the volume; this gate re-checks it
+#     as defence in depth and refuses to (re-)enable a volume that belongs to
+#     a different snapshot.  The 2026-11-14 incident was a v1.9.0-era snapshot
+#     being resurrected after an upgrade.
+#   - an UNFORMATTED volume is still adopted automatically: the gate runs
+#     /sbin/e2631-userdata-init --apply (which re-verifies the partition name,
+#     the 47 MiB window behind both slots and the size itself), then migrates
+#     and enables in the same boot.  The interactive confirmation that init
+#     demands is provided by this gate - the checks it guards are the gate's
+#     own: partition found by name, offset >= 0x3f00000, and "a formatted
+#     volume is never re-formatted".
+#   - a FORMATTED volume is only enabled when its marker matches this
+#     firmware, and autoadopt=0 (the documented opt-out) is respected on that
+#     branch too.  v1.10 re-enabled an already formatted volume
+#     unconditionally, which is why the 2026-11-14 opt-out did not survive a
+#     reboot.
+#   - opt-out: set e2631.storage.autoadopt to 0 and commit e2631 - everything
+#     stays manual (/sbin/e2631-userdata-init is then the only way to format
+#     the partition).
 #
 # The ROM fstab ships with the extroot mount DISABLED, because a read-write
 # mount of an unformatted UBI volume would auto-format it (UBIFS
 # create_default_filesystem).  This script is the one place that ever flips
 # the mount on, and it does so only when the volume carries a real UBIFS
-# superblock:
+# superblock that belongs to this snapshot:
 #
-#   gate (this script, START=11): format-if-blank, migrate, enable;
-#   next boot 79_e2631_userdata   attaches the UBI device in preinit and
-#                                 block mounts the volume as /overlay.
+#   preinit 79_e2631_userdata   attaches UBI, verifies the snapshot marker;
+#                               a stale volume is kept away from mount_root
+#   gate (this script, START=11): format-if-blank (init records the marker),
+#                               migrate, enable;
+#   next boot                   block mounts the volume as /overlay.
 #
 # USE_PROCD is deliberately UNSET here: rc.common only tests [ -n "$USE_PROCD" ],
 # so writing the value 0 still counts as "set", switches into the procd branch
 # and replaces start() with a wrapper that does nothing (this script never opens
 # a procd instance) - the gate silently never ran. Unset = start() runs.
 
+# rc.common consumes START; shellcheck cannot see that from here.
+# shellcheck disable=SC2034
 START=11
+
+# Snapshot identity + marker readers; the preinit hook and the initializer use
+# the same file.
+. /lib/e2631-snapshot.sh
 
 vol_device() {
 	idx=""
@@ -62,6 +79,57 @@ autoadopt() {
 	return 0
 }
 
+userdata_mtd_idx() {
+	# prints the mtd index of the userdata partition
+	for d in /sys/class/mtd/mtd[0-9]*; do
+		[ -r "$d/name" ] || continue
+		[ "$(cat "$d/name")" = "userdata" ] || continue
+		echo "${d##*/mtd}"
+		return 0
+	done
+	return 1
+}
+
+userdata_ubi_attached() {
+	# true when the userdata partition is owned by an attached UBI device
+	att_idx=$(userdata_mtd_idx) || return 1
+	for u in /sys/class/ubi/ubi[0-9]*; do
+		[ -r "$u/mtd_num" ] || continue
+		[ "$(cat "$u/mtd_num")" = "$att_idx" ] && return 0
+	done
+	return 1
+}
+
+volume_marker_check() {
+	# Mounts the formatted volume read-write just long enough to read its
+	# marker (the same access mount_root/migrate uses; nothing is formatted
+	# or erased here).  Sets mstate/mhave/mwant for start().
+	mstate=unreadable
+	mhave=""
+	mwant=$(e2631_snapshot_id)
+	dev=$(vol_device) || return 0
+	mkdir -p /tmp/e2631-udmark
+	if ! mount -t ubifs "$dev" /tmp/e2631-udmark 2>/dev/null; then
+		rmdir /tmp/e2631-udmark 2>/dev/null
+		return 0
+	fi
+	mhave=$(e2631_read_marker /tmp/e2631-udmark)
+	umount /tmp/e2631-udmark
+	rmdir /tmp/e2631-udmark 2>/dev/null
+	if [ -z "$mhave" ]; then
+		mstate=missing
+	elif [ "$mhave" = "$mwant" ]; then
+		mstate=ok
+	else
+		mstate=stale
+	fi
+}
+
+disable_extroot() {
+	uci set fstab.e2631_extroot.enabled='0'
+	uci commit fstab
+}
+
 migrate_and_enable() {
 	dev=$(vol_device) || return 1
 	mkdir -p /tmp/e2631-adopt
@@ -84,20 +152,79 @@ migrate_and_enable() {
 }
 
 start() {
-	if active; then
-		echo "e2631-userdata: extroot is the live /overlay" > /dev/kmsg
+	# The preinit hook may already have refused the volume (stale snapshot).
+	# Its flag file is the only trace left, because the hook removed
+	# /dev/ubi0_0 to keep mount_root away from it.
+	if [ -s /tmp/e2631-userdata-refused ]; then
+		while read -r refuse_line; do
+			echo "e2631-userdata: $refuse_line" > /dev/kmsg
+		done < /tmp/e2631-userdata-refused
+		disable_extroot
+		echo "e2631-userdata: extroot kept off in fstab; this boot runs on the internal overlay" > /dev/kmsg
 		return 0
 	fi
+
+	if active; then
+		live=$(head -n 1 "/etc/$E2631_SNAPSHOT_MARKER" 2>/dev/null)
+		[ -n "$live" ] || live=unknown
+		want=$(e2631_snapshot_id)
+		if [ "$live" = "$want" ]; then
+			echo "e2631-userdata: extroot is the live /overlay (snapshot: $live)" > /dev/kmsg
+		else
+			# Only reachable when mount_root pivoted before this firmware's
+			# preinit guard could run (an upgrade boot).  From here /etc/config
+			# belongs to the volume, so writing fstab would only change the
+			# volume's own copy; the next boot's preinit refusal is what stops
+			# the stale overlay for good.
+			echo "e2631-userdata: WARNING: live /overlay snapshot '$live' does not match this firmware '$want'" > /dev/kmsg
+			echo "e2631-userdata: WARNING: configuration written after that snapshot was taken may be missing; the next boot refuses this volume" > /dev/kmsg
+		fi
+		return 0
+	fi
+
 	if ubifs_formatted; then
+		volume_marker_check
 		cur=$(uci -q get fstab.e2631_extroot.enabled)
+		if [ "$mstate" != "ok" ]; then
+			case "$mstate" in
+			missing)
+				echo "e2631-userdata: formatted volume has no snapshot marker (provisioned by an older image) - refusing it" > /dev/kmsg
+				;;
+			stale)
+				echo "e2631-userdata: formatted volume belongs to snapshot '$mhave', this firmware is '$mwant' - refusing it" > /dev/kmsg
+				;;
+			*)
+				echo "e2631-userdata: formatted volume present but its snapshot marker cannot be read - refusing it" > /dev/kmsg
+				;;
+			esac
+			[ "$cur" = "1" ] && disable_extroot
+			echo "e2631-userdata: staying on the internal overlay; the volume is left untouched (README.e2631.md, userdata extroot)" > /dev/kmsg
+			return 0
+		fi
 		if [ "$cur" = "1" ]; then
-			echo "e2631-userdata: volume ready and enabled; extroot engages on this boot" > /dev/kmsg
+			echo "e2631-userdata: userdata volume ready (snapshot $mhave) and enabled in fstab" > /dev/kmsg
+			return 0
+		fi
+		# The volume is ours, but extroot must never be re-enabled behind the
+		# user's back: autoadopt=0 is respected on the formatted-volume branch
+		# too (this is the 2026-11-14 regression).
+		if ! autoadopt; then
+			echo "e2631-userdata: userdata volume ready (snapshot $mhave) but e2631.storage.autoadopt=0 - leaving extroot disabled" > /dev/kmsg
 			return 0
 		fi
 		migrate_and_enable && return 0
 		echo "e2631-userdata: formatted volume present, enable/migrate failed - staying on the internal overlay" > /dev/kmsg
 		return 0
 	fi
+
+	# The UBI volume exists but its block device does not: the preinit guard
+	# took the node away.  Even without the flag file this is not a blank
+	# volume, so never let the adoption path format it.
+	if [ -e /sys/class/ubi/ubi0_0/dev ] && [ ! -e /dev/ubi0_0 ] && userdata_ubi_attached; then
+		echo "e2631-userdata: userdata UBI volume exists but its block device is hidden - refusing to touch it; staying on the internal overlay" > /dev/kmsg
+		return 0
+	fi
+
 	# unformatted volume: default-adopt unless the user opted out
 	if ! autoadopt; then
 		echo "e2631-userdata: no formatted volume, staying on the internal overlay (to adopt the 47 MiB partition run /sbin/e2631-userdata-init)" > /dev/kmsg
@@ -113,7 +240,8 @@ start() {
 	# init demands BOTH the E2631_CONFIRM environment and an interactive
 	# "type ERASE_USERDATA_PARTITION" on stdin (first boot has no tty, and
 	# the gate IS the confirmer) - feed the answer through the pipe; the
-	# hard checks inside init still gate the erase.
+	# hard checks inside init still gate the erase, and init records the
+	# snapshot marker before this gate enables the volume.
 	if printf 'ERASE_USERDATA_PARTITION\n' | E2631_CONFIRM=ERASE_USERDATA_PARTITION /sbin/e2631-userdata-init --apply > /dev/kmsg 2>&1; then
 		migrate_and_enable && return 0
 		echo "e2631-userdata: volume formatted; migration deferred to the next boot" > /dev/kmsg

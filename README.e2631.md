@@ -55,9 +55,43 @@ make -j"$(nproc)"
 ```
 
 产物在 `bin/targets/sanechips/generic/`。固件布局以 kit 的几何常量为准：
-kernel ��� `0x400000`、rootfs 窗口 `0x1100000`（17 MiB）、镜像头
+kernel 位于 `0x400000`、rootfs 窗口 `0x1100000`（17 MiB）、镜像头
 `0x1500000`；正式产物由 kit 的 GitHub Actions（`firmware.yml`）打包成
 `e2631-immortalwrt-*.bin`。
+
+## userdata 分区与 extroot（v1.10）
+
+47 MiB 的 `userdata` 分区可被激活成 `/overlay`（extroot），把可写空间从
+内部 overlay 的约 8 MiB 提升到约 35 MiB。ROM 里 fstab 的 `e2631_extroot`
+默认 `enabled='0'`，只有下面这条链会把它打开：
+
+1. preinit（`/lib/preinit/79_e2631_userdata`，早于 `mount_root`）挂上 UBI；
+   卷上已有 UBIFS 超级块时，短暂只读挂载读取快照标记并与本固件身份比对，
+   不匹配就移除 `/dev/ubi0_0`、把原因写进 `/tmp/e2631-userdata-refused`，
+   `mount_root` 不会切到该卷。这一步必须放在 preinit：`mount_root` 发生在
+   `/etc/init.d/` 之前，只靠 rcS 里的 gate 拦不住旧快照。
+2. 激活 gate（`/etc/init.d/e2631-userdata`，START=11）按四个分支处理（见
+   下表），只有"卷为空 + autoadopt=1"或"快照匹配 + fstab 已启用"才会把
+   `enabled` 写成 1，其余情况一律留在内部 overlay。
+3. 下一次启动由 fstools 把该卷挂成 `/overlay`。
+
+| 分支 | 卷状态 | 行为 |
+| --- | --- | --- |
+| 无卷（或空卷）+ autoadopt=1 | 没有 UBIFS 超级块 | 调 `/sbin/e2631-userdata-init --apply`（六道检查 + 确认字串）格式化、写入快照标记、迁移现有配置、打开 extroot；本次启动仍走内部 overlay |
+| 空卷 + autoadopt=0 | 没有超级块 | 什么都不做，留在内部 overlay |
+| 已格式化 + autoadopt=0 | 标记与固件匹配 | 留在内部 overlay。v1.10 之前这里会无条件重新启用 extroot，是 2026-11-14 事故的直接原因 |
+| 已格式化 + 标记缺失/不匹配 | 旧快照或未标记的卷 | 拒绝：不挂载、不写 fstab（若 enabled=1 则改回 0）、不格式化，卷原样保留 |
+
+快照标记是卷上的 `/etc/e2631-userdata-version`，内容为固件身份（例如
+`ImmortalWrt SNAPSHOT r0-bde1448 ImmortalWrt v1.10.0`），由
+`/lib/e2631-snapshot.sh` 生成；只有本固件（自动 gate 或手动
+`e2631-userdata-init`）格式化的卷才会带标记。
+
+恢复/重置：被拒绝的旧卷不会被自动清除；确认里面配置不再需要后，先
+`ubidetach -d 0`，再对 `userdata` 对应的 mtd（在
+`/sys/class/mtd/mtd*/name` 里找编号）执行 `mtd erase`，重启后按空卷流程
+重新 adopt。设置 `e2631.storage.autoadopt=0` 则完全手动：只有
+`/sbin/e2631-userdata-init` 会格式化。
 
 ## 约定
 

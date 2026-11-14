@@ -10,8 +10,12 @@ config global
 # an unformatted UBI volume read-write would silently auto-format it
 # (UBIFS create_default_filesystem on first mount), so the activation gate in
 # /etc/init.d/e2631-userdata flips this to 1 only after the volume was seen
-# to carry a real UBIFS superblock.  Until then the router runs on the
-# internal jffs2 overlay, and booting never formats anything.
+# to carry a real UBIFS superblock AND a snapshot marker belonging to this
+# firmware (v1.10: /lib/preinit/79_e2631_userdata verifies the marker before
+# mount_root, the gate re-checks it and only then enables this entry).  A
+# volume from another snapshot, or an unmarked one, is refused and left
+# untouched.  Until then the router runs on the internal jffs2 overlay, and
+# booting never formats anything.
 config mount 'e2631_extroot'
 	option device '/dev/ubi0_0'
 	option target '/overlay'
