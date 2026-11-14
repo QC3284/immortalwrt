@@ -1,0 +1,106 @@
+# Static tree gate for the e2631 fork of ImmortalWrt (QC3284/immortalwrt, branch e2631).
+#
+# Cheap on purpose: it proves this branch is *the expected tree* - the pinned
+# ImmortalWrt base, the four sanechips port commits producing the pinned tree
+# hash, the E2631 device/package files, and a usable seed config - without
+# building anything. The full world build and firmware packaging live in the
+# distribution kit (QC3284/zte-e2631-immortalwrt).
+name: Tree static checks
+
+on:
+  push:
+    branches: [ e2631 ]
+  pull_request:
+    branches: [ e2631 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2631-tree-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin, mirrored from the kit base/commits.env triple pin:
+  # immortalwrt/immortalwrt master @ 2026-11-05T04:06:13Z, kernel 6.18.60.
+  E2631_IW_SHA: 4765b657625ec5bbda74b44400465fe043802b30
+  # The tree the four port commits must produce (git rev-parse HEAD~3^{tree}).
+  E2631_PORT_TREE_SHA: 4f89aa7ad0a5132dc047a27a9073b43916f0f957
+
+jobs:
+  static:
+    name: Static tree gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (full history for the port-commit assertions)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Assert the pinned ImmortalWrt base is an ancestor
+        run: |
+          set -eu
+          git cat-file -e "${E2631_IW_SHA}^{commit}" 2>/dev/null || {
+            echo "pinned ImmortalWrt commit ${E2631_IW_SHA} is missing" >&2; exit 1; }
+          git merge-base --is-ancestor "${E2631_IW_SHA}" HEAD || {
+            echo "pinned base ${E2631_IW_SHA} is not an ancestor of ${GITHUB_SHA}" >&2; exit 1; }
+
+      - name: Assert the four sanechips port commits are present
+        run: |
+          set -eu
+          subjects=$(git log --format=%s)
+          want() {
+            if ! printf '%s\n' "$subjects" | grep -qxF "$1"; then
+              echo "missing port commit subject: $1" >&2; exit 1
+            fi
+          }
+          want 'kernel: add generic DWC3 platform glue package'
+          want 'mt76: serialize device reads with outer cache maintenance'
+          want 'sanechips: add ZX279128S target'
+          want 'sanechips: add support for ZTE ZXHN H3600'
+
+      - name: Assert the four port commits produce the pinned tree hash
+        run: |
+          set -eu
+          fourth=$(git log --format='%H %s' | awk '$0 ~ / sanechips: add support for ZTE ZXHN H3600$/ {print $1; exit}')
+          test -n "$fourth" || { echo "cannot find the fourth port commit" >&2; exit 1; }
+          tree=$(git rev-parse "$fourth^{tree}")
+          test "$tree" = "${E2631_PORT_TREE_SHA}" || {
+            echo "port series tree $tree != pinned ${E2631_PORT_TREE_SHA}" >&2; exit 1; }
+
+      - name: Assert the e2631 tree files are present
+        run: |
+          set -eu
+          for f in \
+            target/linux/sanechips/Makefile \
+            target/linux/sanechips/config-6.18 \
+            target/linux/sanechips/image/Makefile \
+            target/linux/sanechips/image/Makefile.e2631 \
+            target/linux/sanechips/dts/zx279128s-zte-zxhn-h3600.dts \
+            target/linux/sanechips/base-files/etc/config/wireless \
+            target/linux/sanechips/base-files/lib/upgrade/platform.sh \
+            package/e2631/e2631-fwslot/Makefile \
+            package/e2631/luci-app-e2631/Makefile \
+            seed/e2631.config
+          do
+            test -f "$f" || { echo "missing tree file: $f" >&2; exit 1; }
+          done
+
+      - name: Install defconfig prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bison flex gawk gettext libncurses-dev libssl-dev \
+            python3 rsync unzip wget zstd
+
+      - name: Copy the seed config and run make defconfig
+        run: |
+          set -eu
+          cp seed/e2631.config .config
+          make defconfig
+          grep -q '^CONFIG_TARGET_sanechips=y$' .config
+          grep -q '^CONFIG_TARGET_sanechips_generic=y$' .config
+          grep -q '^CONFIG_TARGET_DEVICE_sanechips_generic_DEVICE_zte_zxhn-e2631=y$' .config
+          echo "make defconfig: OK"
