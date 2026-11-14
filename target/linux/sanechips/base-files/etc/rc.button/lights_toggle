@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 
 # LED on/off button: switch every LED off, and on the next press restore
 # the configured LED triggers and the power LED's status colour.

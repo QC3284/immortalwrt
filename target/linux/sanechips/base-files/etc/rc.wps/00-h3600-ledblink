@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Starts the WPS LED blinking for the duration of the pushbutton window.
 # Always exits non-zero so /etc/rc.button/wps's dispatch loop continues on
 # to any real WPS-trigger script - this only handles the LED side.
