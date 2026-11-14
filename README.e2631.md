@@ -130,5 +130,8 @@ ARM target 上无意义，不要动它们。
 
 - 本 fork 自用，不向上游提 issue/PR。
 - 真机刷写有风险；镜像只由 kit 的发布流程产出，刷写前需人工确认。
-- `e2631` 分支只做 fast-forward 式更新，不要 force-push：上面那个不变量
-  树必须一直可达。
+- `e2631` 上的历史分两层：`e96aed31` 及之前的 commit（移植系列 + E2631
+  板级/设备包/seed）不可改写、永不重写；CI-only commit 和未推送的修复
+  工作可以在 Lead 批准后改写（例如补 Signed-off-by / commit message）。
+- `e2631` 的 force-push 只在 Lead 批准并使用 `--force-with-lease` 时允许；
+  上面那个不变量树必须一直可达。
