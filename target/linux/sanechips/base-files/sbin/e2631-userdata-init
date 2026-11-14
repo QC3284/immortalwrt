@@ -107,7 +107,18 @@ if ! e2631_write_marker /tmp/e2631-udfmt; then
 	echo "FATAL: the volume was formatted but its snapshot marker could not be recorded; the boot gate will refuse it until this is fixed"
 	exit 1
 fi
-echo "APPLY: recorded snapshot marker: $(e2631_snapshot_id)"
+# Read the marker back: a marker that is not exactly this firmware's
+# identity (2026-11-14: one newline) must fail HERE, not on the next boot
+# when preinit refuses the volume it just adopted.
+marker_want=$(e2631_snapshot_id) || marker_want=
+marker_have=$(e2631_read_marker /tmp/e2631-udfmt)
+if [ -z "$marker_have" ] || [ "$marker_have" != "$marker_want" ]; then
+	umount /tmp/e2631-udfmt 2>/dev/null
+	rmdir /tmp/e2631-udfmt 2>/dev/null
+	echo "FATAL: the formatted volume's snapshot marker did not read back as this firmware's identity (want '$marker_want', read '$marker_have'); refusing to leave an unusable extroot"
+	exit 1
+fi
+echo "APPLY: recorded snapshot marker: $marker_have"
 umount /tmp/e2631-udfmt
 rmdir /tmp/e2631-udfmt
 
