@@ -230,7 +230,8 @@ static int zx_slotpart_parse(struct mtd_info *master,
 		out[i].mask_flags = parts[i].mask;
 		/* Without this the mtd device has no OF node, the
 		 * nvmem-layout under "tag" never registers, and the
-		 * gmac driver's of_get_mac_address() defers for ever. */
+		 * gmac driver's of_get_mac_address() defers for ever.
+		 */
 		out[i].of_node = parts[i].np;
 	}
 	kfree(parts);

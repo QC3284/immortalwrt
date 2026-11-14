@@ -1,4 +1,5 @@
 #!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
 # Liveness beacon as a boot service, so the console keeps a ruler even when the
 # image is freshly flashed and nobody has ssh'd in yet.  START=20 is early (the
 # radio loader is START=95), so the first HB lines land before a client can

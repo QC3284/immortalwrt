@@ -741,7 +741,8 @@ static int zx_ppe_block_cb(enum tc_setup_type type, void *type_data, void *cb_pr
 	mutex_lock(&adapter->ppe_lock);
 #ifdef CONFIG_ZX_FFE
 	/* the FFE control plane owns learn/delete/stats when enabled - the
-	 * vendor scheme (re/ffe/NOTES.md); ppe.c stays the hardware layer */
+	 * vendor scheme (re/ffe/NOTES.md); ppe.c stays the hardware layer
+	 */
 	if (zx_ffe_active()) {
 		const struct zx_ffe_ops *ops = zx_ffe_active();
 

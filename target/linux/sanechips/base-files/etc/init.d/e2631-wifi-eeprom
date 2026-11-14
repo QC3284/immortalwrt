@@ -1,4 +1,5 @@
 #!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
 # Stage the MT7916 calibration at boot; do NOT load the driver here.
 #
 # History of this file, because each step was paid for in power cycles:

@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Turn "driver loaded" into "SSID a phone can see".
 #
 # This image boots silent on purpose, and there are TWO separate gates:

@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Snapshot identity helpers for the E2631 userdata extroot.
 #
 # The 47 MiB "userdata" partition can be used as an extroot: once it carries a
@@ -40,8 +41,10 @@ e2631_snapshot_id() {
 	snap_revision=""
 	if [ -r "$snap_os_release" ]; then
 		snap_id=$(sed -n "s/^DISTRIB_ID='\(.*\)'$/\1/p" "$snap_os_release" | head -n 1)
-		snap_release=$(sed -n "s/^DISTRIB_RELEASE='\(.*\)'$/\1/p" "$snap_os_release" | head -n 1)
-		snap_revision=$(sed -n "s/^DISTRIB_REVISION='\(.*\)'$/\1/p" "$snap_os_release" | head -n 1)
+		snap_release=$(sed -n "s/^DISTRIB_RELEASE='\(.*\)'$/\1/p" \
+			"$snap_os_release" | head -n 1)
+		snap_revision=$(sed -n "s/^DISTRIB_REVISION='\(.*\)'$/\1/p" \
+			"$snap_os_release" | head -n 1)
 	fi
 	snap_extra=""
 	if [ -r "$snap_version_file" ]; then
@@ -65,7 +68,8 @@ e2631_snapshot_id() {
 e2631_read_marker() {
 	read_root=$1
 	[ -n "$read_root" ] || return 1
-	for read_path in "$read_root/upper/etc/$E2631_SNAPSHOT_MARKER" "$read_root/etc/$E2631_SNAPSHOT_MARKER"; do
+	for read_path in "$read_root/upper/etc/$E2631_SNAPSHOT_MARKER" \
+		"$read_root/etc/$E2631_SNAPSHOT_MARKER"; do
 		if [ -r "$read_path" ]; then
 			head -n 1 "$read_path"
 			return 0

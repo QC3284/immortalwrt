@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Drive the tri-colour lamp from what the box is actually doing.
 #
 # Stock firmware semantics (from its manual) are kept where they are worth

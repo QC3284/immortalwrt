@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Bring up the MT7916 outside the boot-critical path.
 #
 # Called by /etc/init.d/e2631-wifi-load (START=95) with a delay, or by hand.

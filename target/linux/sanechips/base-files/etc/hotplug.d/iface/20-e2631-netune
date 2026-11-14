@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Keep the queue tuning applied across link/firewall events. The queue
 # rps/xps settings get reset to the driver default (rps_cpus=1, CPU0) when
 # the flowtable rebinds - which happens on every firewall reload, and fw4

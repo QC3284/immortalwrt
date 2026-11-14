@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Firewall flow offloading: ON by default (v1.3, kept in v1.4), wired IPv4
 # measured >=395 Mbit/s through the PPE with the CPU at 7%.
 #

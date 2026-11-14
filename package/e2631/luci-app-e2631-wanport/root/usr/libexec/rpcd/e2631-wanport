@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # rpcd backend for the WAN port page (rpcd shell protocol, same shape as
 # luci-app-e2631's backend):
 #

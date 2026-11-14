@@ -1,4 +1,5 @@
 #!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
 # shellcheck disable=SC1091
 # Extroot activation gate for the 47 MiB userdata partition.
 #

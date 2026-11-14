@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # cron backstop for the queue tuning (see /sbin/e2631-netune-apply)
 (crontab -l 2>/dev/null | grep -q e2631-netune-apply) ||
 	echo "* * * * * /sbin/e2631-netune-apply" >> /etc/crontabs/root

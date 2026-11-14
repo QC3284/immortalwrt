@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # 2026-10-25: a boot that finds the pending marker no longer skips the radio
 # for the whole boot.  Skip-once turned every interrupted attempt (a hang that
 # took a power cycle, or a power cut inside the init window) into a SECOND

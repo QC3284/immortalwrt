@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Read-only advisor for the userdata extroot first boot.  Prints what it
 # found and what it would do; never writes, formats or mounts anything.
 # The actual decisions live elsewhere:

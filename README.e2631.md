@@ -117,6 +117,15 @@ ARM target 上无意义，不要动它们。
   192.168.0.0/16、10.0.0.0/8 放行 SSH，并对私网放行 HTTP/HTTPS，升级后
   这些规则不会再出现。
 
+## 代码风格（checkpatch）
+
+树内容按内核 checkpatch 基线清理：`scripts/checkpatch.pl --no-tree --terse
+--show-types -g <commit>`。4 个移植 commit 和 3 个 E2631 历史 commit 保持原
+样（tree-hash 门禁与可审计性），它们的风格问题由 `style:` commit 在树内容
+里修掉；执行位、补丁文件上下文行等"看起来失败但实际正确"的项目，以及
+仍然保留的 warning，记录在 [`docs/checkpatch-exemptions.md`](docs/checkpatch-exemptions.md)
+（树 CI 据此引用）。
+
 ## 约定
 
 - 本 fork 自用，不向上游提 issue/PR。

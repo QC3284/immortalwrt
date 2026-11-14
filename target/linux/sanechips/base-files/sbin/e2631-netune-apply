@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Re-apply the queue tuning; last writer wins against the driver/fw4 resets
 # that flip rps_cpus back to 1 around link events. Called from the iface
 # hotplug (fast path) and every minute from cron (backstop - the delayed

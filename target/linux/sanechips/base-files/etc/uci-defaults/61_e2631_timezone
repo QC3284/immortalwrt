@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # v1.3: the image defaults to UTC with the global NTP pool; this board is used
 # in CN (factory tag carries @CTCC). Show Asia/Shanghai and sync from domestic
 # servers - verified live: jumped to CST within seconds after the switch.

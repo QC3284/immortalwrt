@@ -1,4 +1,5 @@
 #!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
 # Runs /sbin/e2631-trial as a one-shot service on boot.  The script is a no-op unless
 # /etc/e2631-trial-arm exists; see its header for why the auto-revert is not the default.
 START=99

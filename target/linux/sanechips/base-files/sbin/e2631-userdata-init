@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Guarded, explicit initializer for the userdata UBI/UBIFS volume.
 #
 #   e2631-userdata-init --plan    show every check and the exact commands

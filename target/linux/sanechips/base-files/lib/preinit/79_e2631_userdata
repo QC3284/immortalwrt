@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # shellcheck disable=SC1091
 # E2631: attach the userdata UBI before mount_root, so an already-formatted
 # extroot can be picked up.  Never formats, erases or creates volumes here; a

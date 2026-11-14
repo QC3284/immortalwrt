@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Disarm the first-boot auto-revert (/sbin/e2631-trial).
 #
 # /etc is on the jffs2 overlay, so this file survives reboots - which is the

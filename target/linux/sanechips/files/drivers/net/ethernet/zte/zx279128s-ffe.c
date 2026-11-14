@@ -104,7 +104,8 @@ static struct zx_idm_stack zx_idm_stacks[ZX_IDM_STACKS] = {
 /* push: LIFO chain on skb->next, head swap - the vendor's stacks are the
  * handoff between the WiFi driver's MAC-DMA context and the FFE/NPU path.
  * The consumer is the engine poller; here they are exported primitives so
- * the mt76-side hook (next stage) has its vendor-shaped interface. */
+ * the mt76-side hook (next stage) has its vendor-shaped interface.
+ */
 void zx_idm_skb_stack_push(int id, struct sk_buff *skb)
 {
 	struct zx_idm_stack *s;
@@ -217,7 +218,8 @@ static int zx_ffe_flow_add(struct zx_eth_adapter *adapter,
 	atomic_inc(&zx_ffe_learned);
 
 	/* the hardware leg: v4 goes to the PPE (proven path), v6 stays on the
-	 * CPU until the npu_cap_nat6-equivalent key tables are reconstructed */
+	 * CPU until the npu_cap_nat6-equivalent key tables are reconstructed
+	 */
 	if (key.v6) {
 		atomic_inc(&zx_ffe_v6_sw);
 		return -EOPNOTSUPP;	/* fw4 keeps the software flowtable */
@@ -374,7 +376,8 @@ static int __init zx_ffe_init(void)
 	zx_ffe_proc_dir = proc_mkdir("zx-ffe", NULL);
 	/* a name with a slash is not creatable under /proc root - the
 	 * directory has to exist first (v1.6 built the file name with the
-	 * slash and the WARN at 0.155 s was this call failing) */
+	 * slash and the WARN at 0.155 s was this call failing)
+	 */
 	if (!zx_ffe_proc_dir || !proc_create("cmd", 0644, zx_ffe_proc_dir, &zx_ffe_cmd_pops))
 		pr_warn("no /proc/zx-ffe/cmd (procfs unavailable?)\n");
 	ret = zx_ffe_ops_register(&zx_ffe_ops_impl);

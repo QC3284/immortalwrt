@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # First-flash gate (checklist P0-4): one command that answers "may this be
 # flashed, on this box, with this package" before anything is written.
 #

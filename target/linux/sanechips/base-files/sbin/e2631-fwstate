@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Sample the MT7916's own firmware-state register without a driver in the way.
 #
 #   e2631-fwstate [rounds]     watch it while nothing else touches the card

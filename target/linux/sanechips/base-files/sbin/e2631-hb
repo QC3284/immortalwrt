@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Console liveness beacon, AND a copy that survives the power cut.
 #
 # Why two sinks: when this board dies the kernel stops printing mid-line, so the

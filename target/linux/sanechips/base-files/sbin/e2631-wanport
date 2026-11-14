@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # WAN 口选择：把「任意有线口当 WAN」做成一个**手动**动作。
 #
 # 背景（完整逆向见 docs/wanlan-adaptive-逆向记录-2026-10-27.md）：原厂在 cspd 的

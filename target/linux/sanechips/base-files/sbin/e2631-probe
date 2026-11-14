@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Hardware probe for the E2631 port: everything the board device tree had to
 # guess at, measured from the running system and printed to stdout.
 # Read-only; it never writes flash. Run it over the network on first boot:

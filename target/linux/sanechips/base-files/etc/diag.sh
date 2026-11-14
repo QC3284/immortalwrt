@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # E2631 LED policy (2026-10-24, user-specified):
 #
 #   boot phase          red   blink SLOW (600 ms; stock was 100 ms)

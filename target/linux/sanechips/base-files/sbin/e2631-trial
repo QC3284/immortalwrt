@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # First-boot safety net for this port -- ARMED ONLY ON REQUEST.
 #
 # cspboot chooses a slot by comparing the serial numbers in the version headers; it has no

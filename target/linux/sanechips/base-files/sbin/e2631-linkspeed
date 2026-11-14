@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Report what each PCIe link actually negotiated (speed, width, and the root
 # port's Target Link Speed), reading config space the way lspci does.
 #

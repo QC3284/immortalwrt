@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # rpcd backend for the E2631 board page, speaking the rpcd shell protocol
 # (see luci.zte-mesh for the reference implementation):
 #

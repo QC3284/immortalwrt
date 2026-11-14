@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Read-only E2631 userdata detection.  Never erase, format, attach or detach.
 # Finds the partition by name (mtd numbering shifts with the rootfs_data
 # split) and reports the state of the UBI layer on top of it.
