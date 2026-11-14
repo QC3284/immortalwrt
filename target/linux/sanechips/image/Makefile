@@ -57,4 +57,6 @@ define Device/zte_zxhn-h3600
 endef
 TARGET_DEVICES += zte_zxhn-h3600
 
+include $(TOPDIR)/target/linux/sanechips/image/Makefile.e2631
+
 $(eval $(call BuildImage))

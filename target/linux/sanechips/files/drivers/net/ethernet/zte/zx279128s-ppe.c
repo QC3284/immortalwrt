@@ -3,6 +3,15 @@
  * ZTE zx279128s Ethernet switch: hardware flow offload
  *
  * Copyright (C) 2026 Navid Ghahremani <ghahramani.navid@gmail.com>
+ *
+ * E2631 overlay note: this file is a FULL COPY of the base tree's
+ * target/linux/sanechips/files/drivers/net/ethernet/zte/zx279128s-ppe.c
+ * (overlay cp -r overwrites the base copy) carrying exactly ONE local
+ * change: zx_update_traps() keeps the IPv6 ethertype trap on while the PPE
+ * is active, because otherwise IPv6 addressed to the router has no path to
+ * the CPU (known-issues PPE-IPV6-TCP).  apply.sh asserts the base copy is
+ * still at the expected blob so a base-tree update cannot be silently
+ * shadowed by this overlay.
  */
 
 #include <linux/bitfield.h>
@@ -15,6 +24,7 @@
 #include <net/flow_offload.h>
 
 #include "zx279128s-eth.h"
+#include "zx-ffe-ops.h"
 
 /* ---- Hardware flow offload ------------------------------------------ */
 
@@ -292,7 +302,7 @@ static void zx_ppe_mangle_eth(const struct flow_action_entry *act, void *eth)
 	memcpy(dest, src, act->mangle.mask ? 2 : 4);
 }
 
-static int zx_ppe_flow_add(struct zx_eth_adapter *adapter,
+int zx_ppe_flow_add(struct zx_eth_adapter *adapter,
 			   struct flow_cls_offload *f)
 {
 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -510,7 +520,7 @@ static void zx_ppe_entry_remove(struct zx_eth_adapter *adapter,
 	adapter->ppe_count--;
 }
 
-static int zx_ppe_flow_del(struct zx_eth_adapter *adapter,
+int zx_ppe_flow_del(struct zx_eth_adapter *adapter,
 			   struct flow_cls_offload *f)
 {
 	struct zx_ppe_entry *e;
@@ -525,7 +535,7 @@ static int zx_ppe_flow_del(struct zx_eth_adapter *adapter,
 }
 
 /* No packet counters: report use from the entry's hit flag */
-static int zx_ppe_flow_stats(struct zx_eth_adapter *adapter,
+int zx_ppe_flow_stats(struct zx_eth_adapter *adapter,
 			     struct flow_cls_offload *f)
 {
 	struct zx_ppe_entry *e;
@@ -570,20 +580,33 @@ static const u32 zx_ppe_reg_vals[4] = { 0x7fff, 4, 0x7fff7fff, 0x3d };
  * payload (trap reason 0x2c), which would send every pure ACK of an
  * offloaded connection through the software path.  Both are off while
  * offload is active.  SYN, FIN and RST still reach the CPU, so conntrack
- * sees connections open and close.  Hardware LAN switching also needs the
- * IPv6 trap off.  Frames for the router, broadcast, multicast and unknown
- * unicast still reach the CPU through the other traps.
+ * sees connections open and close.  Frames for the router, broadcast,
+ * multicast and unknown unicast still reach the CPU through the other traps.
+ *
+ * The IPv6 ethertype trap follows the same rule EXCEPT it never goes off
+ * while the PPE is active.  With offload on, zx_update_mac_tables() moves
+ * our MACs into the ONU routed table and empties the trap-DMAC table, and
+ * the classifier holds IPv4 rules only (zx_ppe_v4_index/zx_ppe_v4_rule):
+ * with the IPv6 trap off too, an IPv6 frame addressed to the router is left
+ * with no path to the CPU at all - measured on hardware as "TCP connect ok,
+ * zero payload, timeout" for every IPv6 connection (known-issues
+ * PPE-IPV6-TCP; zwzzrl fork, 2026-10-27).  The trap fires before the flow
+ * lookup, so IPv6 keeps working over the software path - bridged LAN-to-LAN
+ * IPv6 included - while IPv4 keeps the PPE.  With the PPE off, hardware LAN
+ * switching wants the trap off as before; IPv6 then reaches the CPU through
+ * the trap-DMAC table by MAC.
  */
 void zx_update_traps(struct zx_eth_adapter *adapter)
 {
 	void __iomem *base = adapter->base;
-	bool sw, fwd;
+	bool sw, fwd, v6;
 	u32 val;
 
 	spin_lock(&adapter->trap_lock);
 	sw = READ_ONCE(adapter->sw_members);
 	fwd = READ_ONCE(adapter->ppe_active) || sw;
-	writel((fwd ? 0 : ETH_P_IP << 16) | (sw ? 0 : ETH_P_IPV6),
+	v6 = READ_ONCE(adapter->ppe_active) || !sw;
+	writel((fwd ? 0 : ETH_P_IP << 16) | (v6 ? ETH_P_IPV6 : 0),
 	       base + ZX_SPA_TRAP_ETH_TYPE);
 	val = readl(base + ZX_SPA_UP_REG_PKT_EN + 8);
 	if (fwd)
@@ -716,6 +739,33 @@ static int zx_ppe_block_cb(enum tc_setup_type type, void *type_data, void *cb_pr
 		return -EOPNOTSUPP;
 
 	mutex_lock(&adapter->ppe_lock);
+#ifdef CONFIG_ZX_FFE
+	/* the FFE control plane owns learn/delete/stats when enabled - the
+	 * vendor scheme (re/ffe/NOTES.md); ppe.c stays the hardware layer */
+	if (zx_ffe_active()) {
+		const struct zx_ffe_ops *ops = zx_ffe_active();
+
+		switch (f->command) {
+		case FLOW_CLS_REPLACE:
+			ret = ops->flow_add(adapter, f);
+			break;
+		case FLOW_CLS_DESTROY:
+			ret = ops->flow_del(adapter, f);
+			break;
+		case FLOW_CLS_STATS:
+			ret = ops->flow_stats(adapter, f);
+			break;
+		default:
+			ret = -EOPNOTSUPP;
+		}
+		if (ret == -EOPNOTSUPP)
+			adapter->ppe_add_skip++;
+		else if (ret && ret != -EEXIST && ret != -ENOENT)
+			adapter->ppe_add_fail++;
+		mutex_unlock(&adapter->ppe_lock);
+		return ret;
+	}
+#endif
 	switch (f->command) {
 	case FLOW_CLS_REPLACE:
 		ret = zx_ppe_flow_add(adapter, f);
