@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mt76
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_LICENSE:=BSD-3-Clause-Clear
 PKG_LICENSE_FILES:=
@@ -237,7 +237,6 @@ define KernelPackage/mt7915e
   TITLE:=MediaTek MT7915e wireless driver
   DEPENDS+=@PCI_SUPPORT +kmod-mt76-connac +kmod-hwmon-core +kmod-thermal +@DRIVER_11AX_SUPPORT +@KERNEL_RELAY
   FILES:= $(PKG_BUILD_DIR)/mt7915/mt7915e.ko
-  AUTOLOAD:=$(call AutoProbe,mt7915e)
 ifneq ($(CONFIG_TARGET_mediatek_filogic)$(CONFIG_TARGET_mediatek_mt7622),)
   MODPARAMS.mt7915e:=wed_enable=Y
 endif
