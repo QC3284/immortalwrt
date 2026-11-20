@@ -25,6 +25,6 @@ case "$st" in
 		echo "PLAN: volume has no UBIFS superblock - run /sbin/e2631-userdata-init to format it (all current content will be erased)"
 		;;
 	READY:*)
-		echo "PLAN: formatted volume present - /etc/init.d/e2631-userdata enables the extroot fstab entry; /overlay moves to it on the next boot"
+		echo "PLAN: formatted volume present - preinit verifies its snapshot marker and /etc/init.d/e2631-userdata enables the extroot fstab entry only when it matches this firmware; /overlay moves to it on the next boot (a foreign snapshot is refused)"
 		;;
 esac

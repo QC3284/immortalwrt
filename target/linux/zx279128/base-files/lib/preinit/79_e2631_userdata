@@ -1,7 +1,18 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
+# shellcheck disable=SC1091
 # E2631: attach the userdata UBI before mount_root, so an already-formatted
-# extroot can be picked up.  Never formats, erases or creates volumes here.
+# extroot can be picked up.  Never formats, erases or creates volumes here; a
+# formatted volume is only mounted read-write long enough to read its snapshot
+# marker (UBIFS may replay its journal, as mount_root would do anyway).
+#
+# This is also the last point where a stale extroot can be stopped: mount_root
+# pivots overlayfs onto the volume if /etc/config/fstab (the jffs2 copy)
+# says enabled=1, and nothing in rcS can undo that afterwards.  A volume whose
+# snapshot marker is missing or does not match this firmware is therefore kept
+# away from the fstools probe here (remove /dev/ubi0_0) and the rcS gate gets
+# the reason from /tmp/e2631-userdata-refused, so it can turn the persisted
+# fstab entry back off.  Marker identity lives in /lib/e2631-snapshot.sh.
 #
 # Measured on the box (2026-11-07, v1.9.0 first boots), two things this hook
 # has to do that its first version did not:
@@ -31,6 +42,59 @@ e2631_userdata_mtd() {
 	return 1
 }
 
+# shared snapshot identity + marker readers (also used by the rcS gate)
+if [ -r /lib/e2631-snapshot.sh ]; then
+	. /lib/e2631-snapshot.sh
+fi
+
+e2631_userdata_refuse() {
+	# fstools' extroot probe globs /dev/ubi0_0, so removing it is enough to keep
+	# mount_root on jffs2.  UBI stays attached and the volume's data is left
+	# alone, so the stale snapshot remains recoverable by hand.
+	refuse_reason=$1
+	rm -f /dev/ubi0_0
+	{
+		echo "e2631-userdata: refusing the userdata extroot: $refuse_reason"
+		echo "e2631-userdata: stayed on the internal overlay; the volume was not modified"
+	} > /tmp/e2631-userdata-refused
+	[ -e /dev/console ] && echo "e2631-userdata: refusing the extroot: $refuse_reason" > /dev/console
+	return 0
+}
+
+e2631_userdata_verify_snapshot() {
+	# A blank volume is the adoption path and the rcS gate decides on it; only
+	# a formatted volume carries a snapshot identity to verify.
+	[ -e /dev/ubi0_0 ] || return 0
+	[ "$(dd if=/dev/ubi0_0 bs=4 count=1 2>/dev/null | md5sum | cut -c1-32)" = "570471baa3a367a44fa9baef107a7216" ] || return 0
+
+	if ! command -v e2631_snapshot_id >/dev/null 2>&1; then
+		e2631_userdata_refuse "the snapshot helper /lib/e2631-snapshot.sh is missing"
+		return 0
+	fi
+
+	mkdir -p /tmp/e2631-udcheck
+	if ! mount -t ubifs /dev/ubi0_0 /tmp/e2631-udcheck; then
+		umount /tmp/e2631-udcheck 2>/dev/null
+		rmdir /tmp/e2631-udcheck 2>/dev/null
+		e2631_userdata_refuse "the formatted volume cannot be mounted to verify its snapshot"
+		return 0
+	fi
+	snap_have=$(e2631_read_marker /tmp/e2631-udcheck)
+	umount /tmp/e2631-udcheck
+	rmdir /tmp/e2631-udcheck 2>/dev/null
+	snap_want=$(e2631_snapshot_id)
+
+	if [ -z "$snap_have" ]; then
+		e2631_userdata_refuse "the formatted volume has no snapshot marker (it was provisioned by an older image)"
+		return 0
+	fi
+	if [ "$snap_have" != "$snap_want" ]; then
+		e2631_userdata_refuse "the volume belongs to snapshot '$snap_have', this firmware is '$snap_want'"
+		return 0
+	fi
+	return 0
+}
+
 e2631_userdata_preinit() {
 	idx=$(e2631_userdata_mtd) || return 0
 	base=/sys/class/mtd/mtd$idx
@@ -57,6 +121,7 @@ e2631_userdata_preinit() {
 
 	[ "$(cat /sys/class/ubi/ubi0/mtd_num 2>/dev/null)" = "$idx" ] || return 0
 	[ "$(cat /sys/class/ubi/ubi0_0/name 2>/dev/null)" = "userdata" ] || return 0
+	e2631_userdata_verify_snapshot
 	return 0
 }
 
