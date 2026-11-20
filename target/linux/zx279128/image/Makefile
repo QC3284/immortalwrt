@@ -83,7 +83,7 @@ define Device/zte_zxhn-e2631
   # declared extent, so the writable tail must stay inside it.
   KERNEL_SIZE := 4096k
   KERNEL := kernel-bin | append-dtb | uImage none | zte-slot-marker | \
-	check-size $(KERNEL_SIZE)
+	check-size $$(KERNEL_SIZE)
   KERNEL_INITRAMFS := kernel-bin | append-dtb | uImage-ramboot
   # The radio is an MT7916AN + MT7976DN (Filogic 630): the mt7915e driver binds
   # it (its id table carries 14c3:7906/790a), but the firmware it asks for is the
