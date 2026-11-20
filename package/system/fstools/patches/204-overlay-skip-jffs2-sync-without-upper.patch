@@ -1,0 +1,34 @@
+From: e2631 tree fork <e2631@localhost>
+Subject: [PATCH] libfstools: skip the jffs2 overlay sync when there is no upper
+
+jffs2_switch() calls switch2jffs(), which mounts the jffs2 volume at
+/tmp/root, and then copies its upper/ directory back onto the root file
+system.  A first boot with a RAM overlay has a fresh jffs2 volume with no
+/tmp/root/upper yet, so "cp -a /tmp/root/upper/* /" matched nothing,
+busybox reported the glob failure and fstools logged
+
+    failed to sync jffs2 overlay
+
+on every such boot, even though there was nothing to synchronize.  Under
+the e2631 first-boot RAM overlay fallback the ERR line looked like a real
+failure in the boot log.
+
+Only run the copy when /tmp/root/upper exists.
+
+Signed-off-by: e2631 tree fork <e2631@localhost>
+
+diff --git a/libfstools/overlay.c b/libfstools/overlay.c
+index ce17a99..b37d4dc 100644
+--- a/libfstools/overlay.c
++++ b/libfstools/overlay.c
+@@ -344,7 +344,9 @@ jffs2_switch(struct volume *v)
+ 
+ 		/* try hard to be in sync */
+ 		ULOG_INFO("synchronizing overlay\n");
+-		if (system("cp -a /tmp/root/upper/* / 2>/dev/null"))
++		/* a first boot with a RAM overlay has no jffs2 upper yet */
++		if (access("/tmp/root/upper", F_OK) == 0 &&
++		    system("cp -a /tmp/root/upper/* / 2>/dev/null"))
+ 			ULOG_ERR("failed to sync jffs2 overlay\n");
+ 		break;
+ 
