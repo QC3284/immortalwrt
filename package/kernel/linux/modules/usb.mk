@@ -571,7 +571,7 @@ $(eval $(call KernelPackage,usb-dwc3-octeon))
 
 define KernelPackage/usb-dwc3-generic-plat
   TITLE:=DWC3 generic platform glue
-  DEPENDS:=@USB_SUPPORT @TARGET_sanechips +kmod-usb-dwc3
+  DEPENDS:=@USB_SUPPORT @TARGET_zx279128 +kmod-usb-dwc3
   KCONFIG:= CONFIG_USB_DWC3_GENERIC_PLAT
   FILES:= $(LINUX_DIR)/drivers/usb/dwc3/dwc3-generic-plat.ko
   AUTOLOAD:=$(call AutoProbe,dwc3-generic-plat,1)

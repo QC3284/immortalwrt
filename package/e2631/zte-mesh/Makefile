@@ -7,7 +7,7 @@
 # `sh tools/build/runtime.sh install`. ZTE_MESH_RUNTIME can point at another one.
 #
 # E2631 adaptation notes (the changes from the upstream package):
-#   - DEPENDS @TARGET_zte -> @TARGET_sanechips (this tree's target name)
+#   - DEPENDS @TARGET_zte -> @TARGET_zx279128 (this tree's target name)
 #   - PKGARCH dropped: the binaries are ARM32 EABI, native on this Cortex-A9
 #     target (on cnjn's ZX279133 they run under AArch64 CONFIG_COMPAT instead)
 #   - files/zte-mesh.config defaults: enabled 0 (upstream ships '1') and the
@@ -27,7 +27,7 @@ define Package/zte-mesh
   SECTION:=net
   CATEGORY:=Network
   TITLE:=ZTE mesh controller runtime (sandboxed vendor multiapd)
-  DEPENDS:=@TARGET_sanechips +ip-full +kmod-veth +kmod-sched-core
+  DEPENDS:=@TARGET_zx279128 +ip-full +kmod-veth +kmod-sched-core
 endef
 
 define Package/zte-mesh/description
