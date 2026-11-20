@@ -32,6 +32,12 @@
 E2631_SNAPSHOT_MARKER=e2631-userdata-version
 
 e2631_snapshot_id() {
+	# Identity = DISTRIB_* from /etc/openwrt_release plus the first line of
+	# /etc/e2631-version.  It must NEVER be empty: an empty identity is what
+	# wrote a marker file holding a single newline on 2026-11-14, and the
+	# next boot then refused the volume it had just adopted.  "unknown" plus
+	# a failure status means "cannot tell"; callers must not write or accept
+	# a marker in that case.
 	snap_os_release=$E2631_OS_RELEASE
 	[ -n "$snap_os_release" ] || snap_os_release=/etc/openwrt_release
 	snap_version_file=$E2631_VERSION_FILE
@@ -53,16 +59,26 @@ e2631_snapshot_id() {
 	if [ -z "$snap_id$snap_release$snap_revision$snap_extra" ]; then
 		# never invent an identity: "unknown" must not match a marker
 		echo unknown
-		return 0
+		return 1
 	fi
 	[ -n "$snap_id" ] || snap_id='?'
 	[ -n "$snap_release" ] || snap_release='?'
 	[ -n "$snap_revision" ] || snap_revision='?'
-	printf '%s %s %s' "$snap_id" "$snap_release" "$snap_revision"
+	snap_out=$(printf '%s %s %s' "$snap_id" "$snap_release" "$snap_revision")
 	if [ -n "$snap_extra" ]; then
-		printf ' %s' "$snap_extra"
+		snap_out="$snap_out $snap_extra"
 	fi
-	echo
+	# Belt and braces: a sed/head pipeline can return nothing while the file
+	# is readable (unexpected quoting, an empty release file, a future build
+	# without one of the keys).  Never let that escape as an empty identity.
+	case "$snap_out" in
+	*[![:space:]]*) ;;
+	*)
+		echo unknown
+		return 1
+		;;
+	esac
+	printf '%s\n' "$snap_out"
 }
 
 e2631_read_marker() {
@@ -81,8 +97,10 @@ e2631_read_marker() {
 e2631_write_marker() {
 	write_root=$1
 	[ -n "$write_root" ] || return 1
-	write_want=$(e2631_snapshot_id)
-	[ "$write_want" != "unknown" ] || return 1
+	write_want=$(e2631_snapshot_id) || return 1
+	# An empty identity is as unusable as "unknown": writing it used to
+	# produce a marker file containing one newline (2026-11-14).
+	[ -n "$write_want" ] && [ "$write_want" != "unknown" ] || return 1
 	write_dir=$write_root/etc
 	[ -d "$write_root/upper" ] && write_dir=$write_root/upper/etc
 	mkdir -p "$write_dir" || return 1
@@ -92,7 +110,8 @@ e2631_write_marker() {
 # shellcheck disable=SC2034  # E2631_MARKER_HAVE/WANT are consumed by callers
 e2631_marker_state() {
 	marker_root=$1
-	E2631_MARKER_WANT=$(e2631_snapshot_id)
+	# An unavailable identity must never accept a volume: treat it as stale.
+	E2631_MARKER_WANT=$(e2631_snapshot_id) || :
 	E2631_MARKER_HAVE=$(e2631_read_marker "$marker_root")
 	if [ -z "$E2631_MARKER_HAVE" ]; then
 		echo missing

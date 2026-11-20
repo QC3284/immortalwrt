@@ -84,6 +84,10 @@ e2631_userdata_verify_snapshot() {
 	rmdir /tmp/e2631-udcheck 2>/dev/null
 	snap_want=$(e2631_snapshot_id)
 
+	if [ -z "$snap_want" ] || [ "$snap_want" = "unknown" ]; then
+		e2631_userdata_refuse "this firmware has no snapshot identity (cannot verify the volume)"
+		return 0
+	fi
 	if [ -z "$snap_have" ]; then
 		e2631_userdata_refuse "the formatted volume has no snapshot marker (it was provisioned by an older image)"
 		return 0
