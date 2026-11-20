@@ -1,0 +1,20 @@
+# E2631 platform behaviour switches.
+#
+# storage:
+#   autoadopt - v1.9 default '1': at boot the activation gate
+#   (/etc/init.d/e2631-userdata) adopts the 47 MiB userdata partition
+#   automatically - an unformatted volume is formatted, the current
+#   internal-overlay configuration is copied over, and /overlay moves to
+#   the volume on the next boot.  Set '0' to restore the v1.8 manual flow
+#   (/sbin/e2631-userdata-init --apply is then required by hand, and the
+#   internal jffs2 overlay stays in charge).
+#
+#   Already formatted volume: the gate respects 'autoadopt' here too, and it
+#   only enables /overlay when the volume's snapshot marker
+#   (/etc/e2631-userdata-version) matches this firmware's snapshot identity.
+#   A volume adopted by a different build - e.g. a v1.9-era snapshot that was
+#   resurrected on 2026-11-14 - is refused and left untouched; the router
+#   keeps booting from the internal overlay.  See README.e2631.md.
+
+config storage 'storage'
+	option autoadopt '1'
