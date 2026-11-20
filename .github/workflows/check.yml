@@ -74,6 +74,18 @@ jobs:
           test "$tree" = "${E2631_PORT_TREE_SHA}" || {
             echo "port series tree $tree != pinned ${E2631_PORT_TREE_SHA}" >&2; exit 1; }
 
+      - name: Assert no stale sanechips target references remain
+        run: |
+          set -eu
+          # The plan-C rename was the hazard: a stale target dependency does not
+          # break the build, it silently hides a package from defconfig. Keep
+          # the tree clean; the CI files themselves name the pattern, so skip
+          # .github (this workflow is the only allowed carrier).
+          if git grep -nE '@TARGET_sanechips|CONFIG_TARGET_sanechips' -- . ':!:.github'; then
+            echo "stale sanechips target reference(s) above" >&2
+            exit 1
+          fi
+
       - name: Assert the e2631 tree files are present
         run: |
           set -eu
@@ -110,6 +122,17 @@ jobs:
             build-essential bison flex gawk gettext libncurses-dev libssl-dev \
             python3 rsync unzip wget zstd
 
+      - name: Install the feeds the seed selects from
+        run: |
+          set -eu
+          # The luci-app-* packages live in feeds/luci: their PACKAGE_* symbols
+          # only exist after the feeds are installed. Without this the seed's
+          # luci apps silently vanish from defconfig and the package guard in
+          # the next step would be vacuous for them. The build itself still
+          # consumes the pinned feed commits; this is a metadata-only install.
+          ./scripts/feeds update packages luci
+          ./scripts/feeds install -a
+
       - name: Copy the seed config and run make defconfig
         run: |
           set -eu
@@ -124,4 +147,24 @@ jobs:
           grep -q '^CONFIG_TARGET_zx279128=y$' .config
           grep -q '^CONFIG_TARGET_zx279128_generic=y$' .config
           grep -q '^CONFIG_TARGET_DEVICE_zx279128_generic_DEVICE_zte_zxhn-e2631=y$' .config
+          # The stale @TARGET_sanechips dependency regression removed these two
+          # packages from the resolved seed config without failing anything.
+          grep -q '^CONFIG_PACKAGE_zte-mesh=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-zte-mesh=y$' .config
           echo "make defconfig: OK"
+
+  checkpatch:
+    name: Per-commit checkpatch gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (full history for the per-commit checkpatch run)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Run checkpatch on every e2631 commit since the pinned base
+        # scripts/check-e2631-checkpatch.sh parses the machine-readable
+        # exemption table in docs/checkpatch-exemptions.md, so the documented
+        # exemptions and the enforced ones are the same bytes.
+        run: bash scripts/check-e2631-checkpatch.sh
