@@ -153,6 +153,21 @@ jobs:
           grep -q '^CONFIG_PACKAGE_luci-app-zte-mesh=y$' .config
           echo "make defconfig: OK"
 
+  image-expansion:
+    name: Image pipeline expansion check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Parse the image makefiles and assert the check-size pipeline
+        # RUN6 v2 shipped a kernel pipeline whose check-size stage expanded to an
+        # empty limit and the build stayed green. This parse-only gate (make -pn,
+        # no build) keeps the escaping, the 4096k value and the two non-empty
+        # invocations honest.
+        run: bash scripts/check-e2631-image-expansion.sh
+
   checkpatch:
     name: Per-commit checkpatch gate
     runs-on: ubuntu-24.04
